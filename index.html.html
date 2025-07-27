@@ -1,0 +1,427 @@
+﻿<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8" />
+  <title>شجرة عائلة النعامي في الأردن وعرب 48</title>
+  <script src="https://www.gstatic.com/charts/loader.js"></script>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      direction: rtl;
+      padding: 20px;
+      background-color: #d0e7ff;
+      color: #000;
+    }
+    h2 {
+      color: #003366;
+    }
+    button {
+      margin: 4px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background-color: #5a9bf6;
+      color: white;
+      transition: background-color 0.3s ease;
+    }
+    button:hover {
+      background-color: #4178d1;
+    }
+    input {
+      padding: 6px;
+      font-size: 14px;
+      border-radius: 4px;
+      border: 1px solid #888;
+      margin-left: 10px;
+    }
+    #rootName {
+      color: white;
+      background-color: black;
+      font-weight: bold;
+      border: 1px solid #555;
+    }
+    #familyTree {
+      margin-top: 20px;
+      overflow-x: auto;
+    }
+    .btn-group {
+      display: none;
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<h2>شجرة عائلة النعامي في الأردن وعرب 48</h2>
+
+<div>
+  <label>اسم الجد الأول: </label>
+  <input type="text" id="rootName" />
+  <button onclick="createRoot()">ابدأ الشجرة</button>
+  <button onclick="unlockRootEdit()">تعديل اسم الجد</button>
+</div>
+
+<div id="extraButtons" style="margin-top: 15px;"></div>
+
+<div id="familyTree"></div>
+
+<script>
+  google.charts.load('current', { packages: ['orgchart'] });
+
+  // Firebase config (استبدل بالقيم الخاصة بمشروعك)
+  const firebaseConfig = {
+    apiKey: "AIzaSyDSq7iC9V_8nhuKvp9CQ1gRUdMyn0FzT9c",
+    authDomain: "familytreeproject-929a3.firebaseapp.com",
+    databaseURL: "https://familytreeproject-929a3-default-rtdb.firebaseio.com",
+    projectId: "familytreeproject-929a3",
+    storageBucket: "familytreeproject-929a3.firebasestorage.app",
+    messagingSenderId: "509085397897",
+    appId: "1:509085397897:web:d9c1c752fcacfa878ea758"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const database = firebase.database();
+
+  const PASSWORD = "966";
+  let familyData = null;
+  let initialized = false;
+
+  function generateId() {
+    return '_' + Math.random().toString(36).substr(2, 9);
+  }
+
+  window.onload = () => {
+    database.ref('familyTree').on('value', snapshot => {
+        if (snapshot.exists()) {
+          familyData = snapshot.val();
+          document.getElementById('rootName').value = familyData.name;
+          document.getElementById('rootName').disabled = true;
+          google.charts.setOnLoadCallback(drawTree);
+
+          const startBtn = document.querySelector('button[onclick="createRoot()"]');
+          if (startBtn) startBtn.style.display = 'none';
+        } else {
+          document.getElementById('rootName').disabled = false;
+          document.getElementById('rootName').value = "";
+        }
+        addExportImportButtons();
+      }, error => {
+        alert("خطأ في جلب البيانات من Firebase: " + error.message);
+        addExportImportButtons();
+      })
+      .then(snapshot => {
+        if (snapshot.exists()) {
+          familyData = snapshot.val();
+          document.getElementById('rootName').value = familyData.name;
+          document.getElementById('rootName').disabled = true;
+          google.charts.setOnLoadCallback(drawTree);
+        } else {
+          // إذا لم توجد بيانات، انتظر المستخدم ليبدأ الشجرة
+          document.getElementById('rootName').disabled = false;
+          document.getElementById('rootName').value = "";
+        }
+        addExportImportButtons();
+      })
+      .catch(error => {
+        alert("خطأ في جلب البيانات من Firebase: " + error.message);
+        addExportImportButtons();
+      });
+  };
+
+  function saveData() {
+    if (familyData) {
+      database.ref('familyTree').set(familyData)
+        .then(() => console.log("تم حفظ البيانات في Firebase"))
+        .catch((error) => alert("خطأ في الحفظ: " + error.message));
+    }
+  }
+
+  function createRoot() {
+    if (familyData) {
+      const confirmReset = confirm("⚠️ هناك شجرة عائلة محفوظة بالفعل.\nهل تريد استبدالها؟ سيؤدي هذا إلى حذف كل البيانات السابقة!");
+      if (!confirmReset) return;
+    }
+    const name = document.getElementById('rootName').value.trim();
+    if (!name) {
+      alert("يرجى إدخال اسم الجد الأول");
+      return;
+    }
+    familyData = { id: generateId(), name, children: [] };
+    document.getElementById('rootName').value = name;
+    document.getElementById('rootName').disabled = true;
+    saveData();
+    drawTree();
+  }
+
+  function unlockRootEdit() {
+    const pass = prompt("أدخل كلمة السر لتعديل اسم الجد:");
+    if (pass === PASSWORD) {
+      const newName = prompt("أدخل الاسم الجديد للجد:", familyData.name);
+      if (newName && newName.trim()) {
+        familyData.name = newName.trim();
+        document.getElementById('rootName').value = familyData.name;
+        saveData();
+        drawTree();
+      }
+    } else {
+      alert("كلمة السر غير صحيحة. لا يمكن تعديل اسم الجد.");
+    }
+  }
+
+  function buildRows(person, parentId = '') {
+    let rows = [[
+      { v: person.id, f: `<div style="color:#003366;"><strong data-id="${person.id}">${person.name}</strong></div>` },
+      parentId,
+      ''
+    ]];
+    if (person.children && person.children.length > 0) {
+      person.children.forEach(child => {
+        rows = rows.concat(buildRows(child, person.id));
+      });
+    }
+    return rows;
+  }
+
+  function drawTree() {
+    const container = document.getElementById('familyTree');
+    container.innerHTML = '';
+
+    if (!familyData) {
+      container.innerHTML = '<p>الرجاء إدخال اسم الجد الأول والضغط على "ابدأ الشجرة".</p>';
+      return;
+    }
+
+    const data = new google.visualization.DataTable();
+    data.addColumn('string', 'ID');
+    data.addColumn('string', 'ParentID');
+    data.addColumn('string', 'Tooltip');
+    const rows = buildRows(familyData);
+    data.addRows(rows);
+
+    const chart = new google.visualization.OrgChart(container);
+    chart.draw(data, { allowHtml: true });
+
+    if (!initialized) {
+      document.body.addEventListener('click', () => {
+        document.querySelectorAll('.btn-group').forEach(btn => btn.style.display = 'none');
+      });
+      initialized = true;
+    }
+
+    addActionButtons();
+  }
+
+  function addActionButtons() {
+    const container = document.getElementById('familyTree');
+    const nodes = container.querySelectorAll('strong[data-id]');
+
+    nodes.forEach(node => {
+      const id = node.getAttribute('data-id');
+      const name = node.textContent;
+
+      if (node.parentElement.querySelector('.btn-group')) return;
+
+      const group = document.createElement('span');
+      group.className = 'btn-group';
+
+      const addBtn = document.createElement('button');
+      addBtn.textContent = "أضف ابن / ابنة";
+      addBtn.onclick = (e) => {
+        e.stopPropagation();
+        const pass = prompt("أدخل كلمة السر للإضافة:");
+        if (pass === PASSWORD) {
+          const child = prompt(`أدخل اسم الابن/الابنة لـ ${name}:`);
+          if (child && child.trim()) {
+            addChildById(familyData, id, child.trim());
+            saveData();
+            drawTree();
+          }
+        } else {
+          alert("كلمة السر غير صحيحة.");
+        }
+      };
+
+      const editBtn = document.createElement('button');
+      editBtn.textContent = "تعديل";
+      editBtn.style.backgroundColor = "#28a745";
+      editBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (id === familyData.id) {
+          alert("لا يمكن تعديل اسم الجد من هنا. استخدم الزر المخصص بالأعلى.");
+          return;
+        }
+        const pass = prompt("أدخل كلمة السر للتعديل:");
+        if (pass === PASSWORD) {
+          const newName = prompt(`تعديل الاسم لـ ${name}:`, name);
+          if (newName && newName.trim()) {
+            editNameById(familyData, id, newName.trim());
+            saveData();
+            drawTree();
+          }
+        } else {
+          alert("كلمة السر غير صحيحة.");
+        }
+      };
+
+      const delBtn = document.createElement('button');
+      delBtn.textContent = "حذف";
+      delBtn.style.backgroundColor = "#dc3545";
+      delBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (id === familyData.id) {
+          alert("لا يمكن حذف الجد الأول.");
+          return;
+        }
+        const pass = prompt("أدخل كلمة السر للحذف:");
+        if (pass === PASSWORD) {
+          if (confirm(`هل أنت متأكد من حذف ${name} وجميع أبنائه؟`)) {
+            deletePersonById(familyData, id);
+            saveData();
+            drawTree();
+          }
+        } else {
+          alert("كلمة السر غير صحيحة.");
+        }
+      };
+
+      group.appendChild(addBtn);
+      group.appendChild(editBtn);
+      group.appendChild(delBtn);
+
+      node.parentElement.appendChild(group);
+
+      node.addEventListener('click', (event) => {
+        event.stopPropagation();
+        document.querySelectorAll('.btn-group').forEach(btn => btn.style.display = 'none');
+        group.style.display = 'inline-block';
+      });
+    });
+  }
+
+  function addChildById(person, parentId, childName) {
+    if (person.id === parentId) {
+      if (!person.children) person.children = [];
+      person.children.push({ id: generateId(), name: childName, children: [] });
+      return true;
+    }
+    if (person.children) {
+      return person.children.some(child => addChildById(child, parentId, childName));
+    }
+    return false;
+  }
+
+  function editNameById(person, id, newName) {
+    if (person.id === id) {
+      person.name = newName;
+      return true;
+    }
+    if (person.children) {
+      return person.children.some(child => editNameById(child, id, newName));
+    }
+    return false;
+  }
+
+  function deletePersonById(person, idToDelete) {
+    if (!person.children) return false;
+    for (let i = 0; i < person.children.length; i++) {
+      if (person.children[i].id === idToDelete) {
+        person.children.splice(i, 1);
+        return true;
+      } else {
+        if (deletePersonById(person.children[i], idToDelete)) return true;
+      }
+    }
+    return false;
+  }
+
+  // --- أزرار تصدير واستيراد ---
+  function addExportImportButtons() {
+    const container = document.getElementById('extraButtons');
+
+    const exportBtn = document.createElement('button');
+    exportBtn.textContent = 'تصدير بيانات الشجرة';
+    exportBtn.style.backgroundColor = '#007bff';
+    exportBtn.style.color = '#fff';
+    exportBtn.style.marginRight = '10px';
+
+    const importInput = document.createElement('input');
+    importInput.type = 'file';
+    importInput.accept = '.json';
+    importInput.style.display = 'none';
+
+    const importBtn = document.createElement('button');
+    importBtn.textContent = 'استيراد بيانات الشجرة';
+    importBtn.style.backgroundColor = '#28a745';
+    importBtn.style.color = '#fff';
+
+    container.appendChild(exportBtn);
+    container.appendChild(importBtn);
+    container.appendChild(importInput);
+
+    exportBtn.onclick = () => {
+      if (!familyData) {
+        alert('لا توجد بيانات لتصديرها.');
+        return;
+      }
+      const dataStr = JSON.stringify(familyData, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'familyTreeData.json';
+      a.click();
+
+      URL.revokeObjectURL(url);
+    };
+
+    importBtn.onclick = () => {
+      importInput.click();
+    };
+
+    importInput.onchange = (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const importedData = JSON.parse(e.target.result);
+          if (importedData && importedData.id && importedData.name) {
+            familyData = importedData;
+            document.getElementById('rootName').value = familyData.name;
+            document.getElementById('rootName').disabled = true;
+            saveData();
+            drawTree();
+            alert('تم استيراد البيانات بنجاح.');
+          } else {
+            alert('ملف البيانات غير صالح.');
+          }
+        } catch {
+          alert('خطأ في قراءة الملف.');
+        }
+      };
+      reader.readAsText(file);
+    };
+  }
+</script>
+
+<hr>
+<p style="text-align: center; font-size: 14px; color: #003366;">
+  تصميم: <strong>قاسم إسماعيل النعامي</strong><br />
+  التاريخ: <strong>يوليو 2025</strong><br />
+  للتواصل عبر فيسبوك:
+  <a href="https://web.facebook.com/gassem2001/" target="_blank" style="color: #003366; text-decoration: underline;">
+    اضغط هنا
+  </a>
+</p>
+
+</body>
+</html>
